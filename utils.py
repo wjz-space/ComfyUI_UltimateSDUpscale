@@ -14,7 +14,20 @@ BLUR_KERNEL_SIZE = 15
 def tensor_to_pil(img_tensor, batch_index=0):
     # Takes a batch of images in the form of a tensor of shape [batch_size, height, width, channels]
     # and returns an RGB PIL Image. Assumes channels=3
-    return Image.fromarray((255 * img_tensor[batch_index].cpu().numpy()).astype(np.uint8))
+    img_tensor = img_tensor[batch_index].unsqueeze(0)
+    # Consider device checking if the following fix create unnecessary calculation costs
+    # --- Start of Fix: Check for and clean NaN/Inf values ---
+    # Check if the tensor contains any NaN or Inf values
+    if torch.isnan(img_tensor).any() or torch.isinf(img_tensor).any():
+        # Log a warning to help with debugging
+        logging.warning("[USDU] Warning: NaN or Inf values detected in tensor during conversion to PIL. Cleaning with torch.nan_to_num().")
+        # Replace NaN and Inf values with 0.0 to prevent black image
+        img_tensor = torch.nan_to_num(img_tensor, nan=0.0, posinf=0.0, neginf=0.0)
+    # --- End of Fix ---
+    
+    i = 255. * img_tensor.cpu().numpy()
+    img = Image.fromarray(np.clip(i, 0, 255).astype(np.uint8).squeeze())
+    return img
 
 
 def pil_to_tensor(image):
